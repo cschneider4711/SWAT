@@ -10,7 +10,7 @@ import javassist.CtField;
 import javassist.CtMethod;
 
 public class WhitelistBuildingTransformer implements ClassFileTransformer {
-	
+
 	public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
 			ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
 		if ("java/io/ObjectInputStream".equals(className)) {
@@ -25,7 +25,8 @@ public class WhitelistBuildingTransformer implements ClassFileTransformer {
 			CtClass ctClass = classPool.get("java.io.ObjectInputStream");
 			ctClass.addField( CtField.make("private static java.util.Set whitelist = new java.util.HashSet();", ctClass) );
 			ctClass.addField( CtField.make("private static java.io.FileWriter exportWriter = new java.io.FileWriter(\"whitelist.swat\");", ctClass) );
-			ctClass.addMethod( CtMethod.make("private static void addToWhitelist(Object what) {"
+			ctClass.addField( CtField.make("private static java.io.FileWriter exportWithStacktracesWriter = new java.io.FileWriter(\"whitelist-with-stacktraces.swat\");", ctClass) );
+			ctClass.addMethod( CtMethod.make("private static synchronized void addToWhitelist(Object what) {"
 					+ "  if (what != null && what instanceof java.io.ObjectStreamClass) {"
 					+ "    java.io.ObjectStreamClass candidate = (java.io.ObjectStreamClass)what;"
 					+ "    if (!whitelist.contains(candidate.getName())) {"
@@ -34,6 +35,13 @@ public class WhitelistBuildingTransformer implements ClassFileTransformer {
 					+ "      System.out.println(\"Adding to SWAT whitelist:\"+name);"
 					+ "      exportWriter.write(name+\"\\n\");"
 					+ "      exportWriter.flush();"
+					+ "      exportWithStacktracesWriter.write(name+\"\\n---\\n\");"
+					+ "      StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();"
+					+ "      for (int i=0; i<stackTrace.length; i++) {"
+					+ "        exportWithStacktracesWriter.write(stackTrace[i]+\"\\n\");"
+					+ "      }"
+					+ "      exportWithStacktracesWriter.write(\"\\n\\n=============================\\n\\n\");"
+					+ "      exportWithStacktracesWriter.flush();"
 					+ "    }"
 					+ "  }"
 					+ "}", ctClass) );
