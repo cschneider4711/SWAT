@@ -25,6 +25,7 @@ public class SwatAgent {
 	
 	public static void main(String[] args) {
 		System.out.println("Usage: add as agent to the JVM start via -javaagent:/pointing/to/this/agent-file.jar");
+		System.out.println("Resulting whitelist will get logged to stdout and also into file whitelist.swat");
 	}
 	
 }
