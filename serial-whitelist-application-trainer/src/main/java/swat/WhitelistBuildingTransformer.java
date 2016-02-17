@@ -14,46 +14,95 @@ public class WhitelistBuildingTransformer implements ClassFileTransformer {
 	public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
 			ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
 		if ("java/io/ObjectInputStream".equals(className)) {
-			return applyWhitelistBuildingCode(classfileBuffer);
+			return applyWhitelistBuildingCodeOIS(classfileBuffer);
+		} else if ("com/thoughtworks/xstream/mapper/DefaultMapper".equals(className)) {
+			return applyWhitelistBuildingCodeXStream(classfileBuffer);
 		}
 		return null;
 	}
 
-	private byte[] applyWhitelistBuildingCode(byte[] classfileBuffer) {
+	
+	private byte[] applyWhitelistBuildingCodeOIS(byte[] classfileBuffer) {
 		try {
 			ClassPool classPool = ClassPool.getDefault();
 			CtClass ctClass = classPool.get("java.io.ObjectInputStream");
+
 			ctClass.addField( CtField.make("private static java.util.Set whitelist = new java.util.HashSet();", ctClass) );
-			ctClass.addField( CtField.make("private static java.io.FileWriter exportWriter = new java.io.FileWriter(\"whitelist.swat\");", ctClass) );
-			ctClass.addField( CtField.make("private static java.io.FileWriter exportWithStacktracesWriter = new java.io.FileWriter(\"whitelist-with-stacktraces.swat\");", ctClass) );
-			ctClass.addMethod( CtMethod.make("private static synchronized void addToWhitelist(Object what) {"
+			ctClass.addField( CtField.make("private static java.io.FileWriter exportWriter = new java.io.FileWriter(\"whitelist-ois.swat\");", ctClass) );
+			ctClass.addField( CtField.make("private static java.io.FileWriter exportWithStacktracesWriter = new java.io.FileWriter(\"whitelist-ois-with-stacktraces.swat\");", ctClass) );
+			
+			ctClass.addMethod( CtMethod.make("protected static synchronized void addToWhitelist(Object what) {"
 					+ "  if (what != null && what instanceof java.io.ObjectStreamClass) {"
 					+ "    java.io.ObjectStreamClass candidate = (java.io.ObjectStreamClass)what;"
 					+ "    if (!whitelist.contains(candidate.getName())) {"
 					+ "      whitelist.add(candidate.getName());"
 					+ "      String name = candidate.getName();"
-					+ "      System.out.println(\"Adding to SWAT whitelist:\"+name);"
+					+ "      System.out.println(\"Adding to SWAT OIS whitelist:\"+name);"
 					+ "      exportWriter.write(name+\"\\n\");"
 					+ "      exportWriter.flush();"
 					+ "      exportWithStacktracesWriter.write(name+\"\\n---\\n\");"
 					+ "      StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();"
-					+ "      for (int i=0; i<stackTrace.length; i++) {"
-					+ "        exportWithStacktracesWriter.write(stackTrace[i]+\"\\n\");"
+					+ "      for (int i=2; i<stackTrace.length; i++) {"
+					+ "        exportWithStacktracesWriter.write(String.valueOf(stackTrace[i]));"
+					+ "        exportWithStacktracesWriter.write(\"\\n\");"
 					+ "      }"
 					+ "      exportWithStacktracesWriter.write(\"\\n\\n=============================\\n\\n\");"
 					+ "      exportWithStacktracesWriter.flush();"
 					+ "    }"
 					+ "  }"
 					+ "}", ctClass) );
+			
 			CtMethod ctMethod = ctClass.getDeclaredMethod("resolveClass");
 			ctMethod.insertBefore("addToWhitelist($args[0]);");
+			
 			byte[] byteCode = ctClass.toBytecode();
 			ctClass.detach();
 			return byteCode;
 		} catch (Exception ex) {
+			System.err.println("Unable to instrument OIS");
 			ex.printStackTrace();
 		}
 		return null;
 	}
+	
+	
+	private byte[] applyWhitelistBuildingCodeXStream(byte[] classfileBuffer) {
+		try {
+			ClassPool classPool = ClassPool.getDefault();
+			CtClass ctClass = classPool.get("com.thoughtworks.xstream.mapper.DefaultMapper");
+			ctClass.addField( CtField.make("private static java.util.Set whitelist = new java.util.HashSet();", ctClass) );
+			ctClass.addField( CtField.make("private static java.io.FileWriter exportWriter = new java.io.FileWriter(\"whitelist-xstream.swat\");", ctClass) );
+			ctClass.addField( CtField.make("private static java.io.FileWriter exportWithStacktracesWriter = new java.io.FileWriter(\"whitelist-xstream-with-stacktraces.swat\");", ctClass) );
+			
+			ctClass.addMethod( CtMethod.make("protected static synchronized void addToWhitelist(Object what) {"
+					+ "  if (what != null && what instanceof java.lang.String) {"
+					+ "    java.lang.String candidate = (java.lang.String)what;"
+					+ "    if (!whitelist.contains(candidate)) {"
+					+ "      whitelist.add(candidate);"
+					+ "      System.out.println(\"Adding to SWAT XStream whitelist:\"+candidate);"
+					+ "      exportWriter.write(candidate+\"\\n\");"
+					+ "      exportWriter.flush();"
+					+ "      exportWithStacktracesWriter.write(candidate+\"\\n---\\n\");"
+					+ "      StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();"
+					+ "      for (int i=2; i<stackTrace.length; i++) {"
+					+ "        exportWithStacktracesWriter.write(String.valueOf(stackTrace[i]));"
+					+ "        exportWithStacktracesWriter.write(\"\\n\");"
+					+ "      }"
+					+ "      exportWithStacktracesWriter.write(\"\\n\\n=============================\\n\\n\");"
+					+ "      exportWithStacktracesWriter.flush();"
+					+ "    }"
+					+ "  }"
+					+ "}", ctClass) );
+			CtMethod ctMethod = ctClass.getDeclaredMethod("realClass");
+			ctMethod.insertBefore("addToWhitelist($args[0]);");
 
+			byte[] byteCode = ctClass.toBytecode();
+			ctClass.detach();
+			return byteCode;
+		} catch (Exception ex) {
+			System.err.println("Unable to instrument XStream");
+			ex.printStackTrace();
+		}
+		return null;
+	}
 }
