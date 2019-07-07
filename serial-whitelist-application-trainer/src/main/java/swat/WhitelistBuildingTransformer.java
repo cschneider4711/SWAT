@@ -8,23 +8,25 @@ import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtField;
 import javassist.CtMethod;
+import javassist.LoaderClassPath;
 
 public class WhitelistBuildingTransformer implements ClassFileTransformer {
 
 	public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
 			ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
 		if ("java/io/ObjectInputStream".equals(className)) {
-			return applyWhitelistBuildingCodeOIS(classfileBuffer);
+			return applyWhitelistBuildingCodeOIS(loader, classfileBuffer);
 		} else if ("com/thoughtworks/xstream/mapper/DefaultMapper".equals(className)) {
-			return applyWhitelistBuildingCodeXStream(classfileBuffer);
+			return applyWhitelistBuildingCodeXStream(loader, classfileBuffer);
 		}
 		return null;
 	}
 
 	
-	private byte[] applyWhitelistBuildingCodeOIS(byte[] classfileBuffer) {
+	private byte[] applyWhitelistBuildingCodeOIS(ClassLoader loader, byte[] classfileBuffer) {
 		try {
 			ClassPool classPool = ClassPool.getDefault();
+			classPool.appendClassPath(new LoaderClassPath(loader));
 			CtClass ctClass = classPool.get("java.io.ObjectInputStream");
 
 			ctClass.addField( CtField.make("private static java.util.Set whitelist = new java.util.HashSet();", ctClass) );
@@ -66,9 +68,10 @@ public class WhitelistBuildingTransformer implements ClassFileTransformer {
 	}
 	
 	
-	private byte[] applyWhitelistBuildingCodeXStream(byte[] classfileBuffer) {
+	private byte[] applyWhitelistBuildingCodeXStream(ClassLoader loader, byte[] classfileBuffer) {
 		try {
 			ClassPool classPool = ClassPool.getDefault();
+			classPool.appendClassPath(new LoaderClassPath(loader));
 			CtClass ctClass = classPool.get("com.thoughtworks.xstream.mapper.DefaultMapper");
 			ctClass.addField( CtField.make("private static java.util.Set whitelist = new java.util.HashSet();", ctClass) );
 			ctClass.addField( CtField.make("private static java.io.FileWriter exportWriter = new java.io.FileWriter(\"whitelist-xstream.swat\");", ctClass) );
